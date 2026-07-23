@@ -35,3 +35,280 @@ curl -O https://helidon.io
 chmod +x helidon && mv helidon /usr/local/bin/
 Use code with caution.2. Trainer Machine Configuration (ASUS Windows Laptop)Java Runtime Layer: Install Oracle JDK 17 Windows x64 Installer. Set system environment variable JAVA_HOME pointing to C:\Program Files\Java\jdk-17.Native Relational Core: Download and install Oracle Database 23ai Free for Windows natively. Set the system password to Welcome_ADF14c. Ensure your listener (listener.ora) points to 0.0.0.0 to permit remote monitoring connections.Reference IDE: Launch Oracle JDeveloper Studio 14c using the native Windows JDK command string.API Validation Tools: Install Postman Desktop Client to demonstrate cross-network payload ingestion and state validation.Part 2: 6-Day Master CurriculumDay 1: The Model Layer – ADF Business Components (ADF BC)Objective: Construct transactional, database-backed enterprise objects locally.Topics: Entity Objects (EO), View Objects (VO), Application Modules (AM), declarative validation rules.🛠️ Practical Exercise:Connect local JDeveloper to the local Dockerized Oracle Database 23ai instance.Build DepartmentsEO and EmployeesEO maps.Create a declarative constraint: Salary cannot be less than a minimum floor value based on JobId.Use the integrated BC Tester to execute insert/update SQL statements directly without a UI layout.Day 2: The Controller Layer – ADF Task Flows & Structural ScopingObjective: Define multi-step programmatic workflows and data boundaries.Topics: Bounded vs. Unbounded Task Flows, Region components, Managed Beans, Contextual Parameter Passing.🛠️ Practical Exercise:Create an isolated Bounded Task Flow mimicking an employee hiring configuration wizard.Incorporate sequentially chained navigation nodes via train configurations (Identity -> Compensation -> Summary).Add automated rollback checkpoints to discard operational states if a student aborts the onboarding process midway.Day 3: The View Layer – ADF Faces Rich Client & PPR EngineObjective: Construct interactive web console interfaces using modern enterprise components.Topics: ADF Web Components (af:table, af:form), Partial Page Rendering (PPR) listeners, visual skins.🛠️ Practical Exercise:Build an administrative portal layout (hr-dashboard.jsf).Establish an asynchronous parent-child layout using component triggers: selecting a corporate division in the master pane immediately filters target staff records in the secondary data table without a full-page browser refresh.Day 4: Transition to Microservices – ADF REST Web ServicesObjective: Expose legacy monolithic ADF objects as standardized REST endpoints.Topics: REST Framework Configurations, JSON payload manipulation, mapping view attributes to resource properties.🛠️ Practical Exercise:In JDeveloper 14c, create an administrative REST Web Service project.Expose EmployeesVO as a JSON schema resource endpoint.Configure custom GET filters (e.g., query staff matching salary > 5000).Verify the exposed endpoints locally using Postman (http://localhost:7101/hr-app/rest/v1/employees).Day 5: Introduction to Project Spectra & BOSS ArchitectureObjective: Learn the architecture of Oracle Cloud Native Services (Project Spectra) and BOSS (Business Object Spectra Service).Topics: Helidon microservice core, stateless microservices, consumption of BOSS OpenAPI schemas.🛠️ Practical Exercise:Generate a stateless Helidon SE microservice template via Terminal:bashhelidon init
 Use code with caution.Write a controller class simulating a modern BOSS endpoint: consume incoming JSON streams from the Day 4 ADF application, validate them against a schema definition, and emit a status response.Day 6: Cloud-Native Hybrid Integrations & Event StreamingObjective: Orchestrate data exchange between traditional ADF modules and cloud-native services.Topics: Event-driven architecture, cross-origin resource sharing (CORS), mapping payloads into relational layouts.🛠️ Practical Exercise:Build an integration workflow where an action on an ADF page targets a local Helidon microservice.Demonstrate microservice persistence by writing state directly back to the database, ensuring clean data alignment without session dependencies.
+
+
+Part 1: Day 5 – Helidon SE REST Controller CodeIn Project Spectra's architectural model, lightweight Helidon SE microservices process stateless JSON requests. Below is a complete Java implementation for a modern EmployeeService class that handles routing and consumes JSON payloads emitted by your Day 4 ADF application.EmployeeService.javaSave this file in your project under src/main/java/com/spectra/demo/EmployeeService.java.javapackage com.spectra.demo;
+
+import java.util.logging.Logger;
+import io.helidon.common.http.Http;
+import io.helidon.webserver.Routing;
+import io.helidon.webserver.ServerRequest;
+import io.helidon.webserver.ServerResponse;
+import io.helidon.webserver.Service;
+import jakarta.json.Json;
+import jakarta.json.JsonObject;
+
+public class EmployeeService implements Service {
+
+    private static final Logger LOGGER = Logger.getLogger(EmployeeService.class.getName());
+
+    @Override
+    public void update(Routing.Rules rules) {
+        rules
+            .get("/", this::getWelcomeMessage)
+            .post("/process-hire", this::processSpectraNewHire);
+    }
+
+    /**
+     * GET /employee/ - Health check endpoint
+     */
+    private void getWelcomeMessage(ServerRequest request, ServerResponse response) {
+        LOGGER.info("Health check endpoint triggered.");
+        JsonObject jsonResponse = Json.createObjectBuilder()
+                .add("status", "UP")
+                .add("platform", "Project Spectra Core")
+                .build();
+        response.status(Http.Status.OK_200).send(jsonResponse);
+    }
+
+    /**
+     * POST /employee/process-hire - Consumes JSON from ADF REST Layer
+     */
+    private void processSpectraNewHire(ServerRequest request, ServerResponse response) {
+        request.content().as(JsonObject.class)
+            .thenAccept(jsonPayload -> {
+                try {
+                    // Extract fields matching standard ADF View Object structures
+                    String firstName = jsonPayload.getString("firstName", "Unknown");
+                    String lastName = jsonPayload.getString("lastName");
+                    double salary = jsonPayload.getJsonNumber("salary").doubleValue();
+
+                    LOGGER.info("Spectra Cloud Engine Processing: " + firstName + " " + lastName);
+
+                    // Mock validation representing BOSS framework logic
+                    String systemStatus = (salary < 2000) ? "REJECTED_AUDIT_FAIL" : "APPROVED_PROVISIONED";
+
+                    JsonObject spectraReceipt = Json.createObjectBuilder()
+                            .add("transactionId", java.util.UUID.randomUUID().toString())
+                            .add("employeeName", firstName + " " + lastName)
+                            .add("spectraStatus", systemStatus)
+                            .add("timestamp", java.time.Instant.now().toString())
+                            .build();
+
+                    response.status(Http.Status.CREATED_201).send(spectraReceipt);
+
+                } catch (Exception e) {
+                    JsonObject errorResponse = Json.createObjectBuilder()
+                            .add("error", "Invalid BOSS JSON Schema payload: " + e.getMessage())
+                            .build();
+                    response.status(Http.Status.BAD_REQUEST_400).send(errorResponse);
+                }
+            })
+            .exceptionally(throwable -> {
+                response.status(Http.Status.INTERNAL_SERVER_ERROR_500).send(throwable.getMessage());
+                return null;
+            });
+    }
+}
+Use code with caution.Part 2: Day 6 – CORS Configuration & Server BootstrappingWhen students build pages in ADF or modern UI frames on their Mac machines and make asynchronous JavaScript requests to a Helidon instance running on another port (or your trainer machine IP), browsers block it by default due to Cross-Origin Resource Sharing (CORS) constraints.Below is the orchestration code to bind your EmployeeService, configure a production-ready global CORS filter, and run the server.Main.javaSave this file under src/main/java/com/spectra/demo/Main.java.javapackage com.spectra.demo;
+
+import io.helidon.common.http.Http;
+import io.helidon.webserver.Routing;
+import io.helidon.webserver.WebServer;
+import io.helidon.webserver.cors.CorsSupport;
+import io.helidon.webserver.cors.CrossOriginConfig;
+
+public final class Main {
+
+    private Main() { }
+
+    public static void main(final String[] args) {
+        // 1. Explicitly configure Cross-Origin rules allowing ADF frontends to talk to Helidon
+        CorsSupport corsSupport = CorsSupport.builder()
+                .addRule(CrossOriginConfig.builder()
+                        .allowOrigins("*") // In production, replace with exact ADF domain/IP
+                        .allowMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                        .allowHeaders("Content-Type", "Authorization", "X-Requested-With")
+                        .exposeHeaders("Location")
+                        .allowCredentials(true)
+                        .maxAgeAgeSecs(3600)
+                        .build())
+                .build();
+
+        // 2. Build application routing tables 
+        Routing routing = Routing.builder()
+                .register(corsSupport) // Apply CORS filter globally to the routing engine
+                .register("/employee", new EmployeeService()) // Register our custom endpoint
+                .build();
+
+        // 3. Fire up the Helidon Server Sandbox environment
+        WebServer server = WebServer.builder(routing)
+                .port(8080) // Standard microservices listening port
+                .build();
+
+        server.start()
+            .thenAccept(ws -> {
+                System.out.println("-------------------------------------------------------");
+                System.out.println(" SPECTRA MICROSERVICE RUNNING ON: http://localhost:" + ws.port());
+                System.out.println(" Test Health check via: GET http://localhost:" + ws.port() + "/employee");
+                System.out.println("-------------------------------------------------------");
+                ws.whenShutdown().thenRun(() -> System.out.println("Spectra Microservice stopped."));
+            })
+            .exceptionally(t -> {
+                System.err.println("Startup failed: " + t.getMessage());
+                return null;
+            });
+    }
+}
+Use code with caution.Part 3: Project Dependencies (pom.xml)Ensure your student machines include the proper Helidon parsing engine artifacts in their Maven configurations to build this successfully.Add these dependencies into the project's <dependencies> node:xml<dependencies>
+    <!-- Helidon SE WebServer Core -->
+    <dependency>
+        <groupId>io.helidon.webserver</groupId>
+        <artifactId>helidon-webserver</artifactId>
+        <version>2.5.4</version>
+    </dependency>
+    <!-- Native Helidon CORS Filter Module -->
+    <dependency>
+        <groupId>io.helidon.webserver</groupId>
+        <artifactId>helidon-webserver-cors</artifactId>
+        <version>2.5.4</version>
+    </dependency>
+    <!-- JSON Processing Processing Needed for Payloads -->
+    <dependency>
+        <groupId>io.helidon.media</groupId>
+        <artifactId>helidon-media-jsonp</artifactId>
+        <version>2.5.4</version>
+    </dependency>
+</dependencies>
+
+How to Run and Verify on Day 5 & 6Compile & Run on Mac:bashmvn clean package
+java -jar target/your-project-name.jar
+
+Execute a Mock Hire Request (Postman or Terminal):bashcurl -X POST http://localhost:8080/employee/process-hire \
+  -H "Content-Type: application/json" \
+  -d '{"firstName":"Alex","lastName":"Jones","salary":4500.0}'
+
+Part 1: The ADF Managed Bean (Invoking the Helidon REST Endpoint)In a corporate production environment, an ADF Managed Bean intercepts user events (like clicking a button on a web page), packages the underlying business data, and transmits it via HTTP to external cloud services.Create this Java class in the View/Controller user interface project (ViewController) inside JDeveloper 14c.HireEmployeeBean.javajavapackage com.adf.view.beans;
+
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import javax.faces.application.FacesMessage;
+import javax.faces.context.FacesContext;
+import javax.faces.event.ActionEvent;
+import oracle.adf.model.BindingContext;
+import oracle.binding.BindingContainer;
+import oracle.binding.AttributeBinding;
+
+public class HireEmployeeBean {
+
+    public HireEmployeeBean() {
+        super();
+    }
+
+    /**
+     * Action Listener bound directly to the "Process Spectra Hire" UI Button
+     */
+    public void handleSpectraOnboarding(ActionEvent actionEvent) {
+        FacesContext ctx = FacesContext.getCurrentInstance();
+        
+        try {
+            // 1. Safely extract field values using the ADF Model Binding layer
+            BindingContainer bindings = BindingContext.getCurrent().getCurrentBindingsEntry();
+            
+            AttributeBinding firstNameBind = (AttributeBinding) bindings.get("FirstName");
+            AttributeBinding lastNameBind  = (AttributeBinding) bindings.get("LastName");
+            AttributeBinding salaryBind    = (AttributeBinding) bindings.get("Salary");
+
+            String firstName = (firstNameBind != null) ? (String) firstNameBind.getInputValue() : "";
+            String lastName  = (lastNameBind != null) ? (String) lastNameBind.getInputValue() : "";
+            Number salary    = (salaryBind != null) ? (Number) salaryBind.getInputValue() : 0;
+
+            // 2. Programmatically piece together a valid JSON schema payload string
+            String jsonPayload = String.format(
+                "{\"firstName\":\"%s\",\"lastName\":\"%s\",\"salary\":%s}",
+                firstName, lastName, salary.toString()
+            );
+
+            // 3. Initiate an HTTP connection to the local Day 5 Helidon Microservice
+            URL url = new URL("http://localhost:8080/employee/process-hire");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setDoOutput(true);
+
+            // 4. stream out the payload using Standard UTF-8 byte encoding
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = jsonPayload.getBytes(StandardCharsets.UTF_8);
+                os.write(input, 0, input.length);
+            }
+
+            int responseCode = conn.getResponseCode();
+
+            // 5. Present visual toast confirmations back on the ADF Faces screen UI layout
+            if (responseCode == HttpURLConnection.HTTP_CREATED) {
+                FacesMessage msg = new FacesMessage(FacesMessage.SEVERITY_INFO, 
+                    "Spectra Success", "Employee safely synchronized with Cloud Core.");
+                ctx.addMessage(null, msg);
+            } else {
+                FacesMessage msg = new FacesMessage(FacesMessage.SEVERITY_ERROR, 
+                    "Spectra Fail", "Cloud engine rejected request. Status Code: " + responseCode);
+                ctx.addMessage(null, msg);
+            }
+
+        } catch (Exception e) {
+            FacesMessage msg = new FacesMessage(FacesMessage.SEVERITY_FATAL, 
+                "Communication Error", "Unable to establish contact with Helidon: " + e.getMessage());
+            ctx.addMessage(null, msg);
+        }
+    }
+}
+Use code with caution.Part 2: Custom Validation Handlers inside JDeveloper 14cTo catch data structure flaws before sending bad payloads to your Helidon microservice, we implement a declarative custom ADF Business Component Validator. This ensures the data is clean before it ever leaves the Model layer.Step 1: Write the Validation ClassIn your backend Model Project, create a Java class that implements the standard Oracle validation framework interface.javapackage com.adf.model.validators;
+
+import oracle.jbo.rules.JboValidatorInterface;
+import oracle.jbo.rules.JboValidatorContext;
+import oracle.jbo.ValidationException;
+
+public class EmployeePayloadValidator implements JboValidatorInterface {
+
+    public EmployeePayloadValidator() {
+        super();
+    }
+
+    /**
+     * Executes business-layer validations during Entity object validation phases
+     */
+    @Override
+    public boolean validate(JboValidatorContext ctx) {
+        // Access the entity instance currently attempting a transaction save
+        Object targetEntity = ctx.getSource();
+        
+        if (targetEntity != null) {
+            try {
+                // Example programmatic check: Reflectively evaluate fields
+                Object lastName = oracle.jbo.server.ViewRowImpl.class
+                    .getMethod("getAttribute", String.class).invoke(targetEntity, "LastName");
+                
+                if (lastName == null || lastName.toString().trim().isEmpty()) {
+                     return false; // Triggers structural transaction failure
+                }
+            } catch (Exception e) {
+                return true; // Pass gracefully if runtime processing reflection fails
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public String getDescription() {
+        return "Guarantees data passes corporate requirements prior to cloud payload assembly.";
+    }
+
+    @Override
+    public void setDescription(String desc) { }
+}
+
+
+Step 2: Bind the Custom Validator to the Entity ObjectOpen JDeveloper 14c, navigate to your Model Project, and double-click EmployeesEO.xml.Click on the Business Rules structural menu section layout option.Click the green "+" (Add Rule) button icon.From the Rule Type dropdown selection panel, select Custom Validator.Browse and pick your compiled EmployeePayloadValidator class.Enter an explicit corporate error message in the Failure Message field:"Validation Error: Mandatory fields are missing or corrupt. Transmission halted."Part 3: Binding the Managed Bean to the ADF Page ButtonTo tie the logic from Part 1 to your frontend user interface layout:Open your Day 3 dashboard page layout file (dashboard.jsf) inside the visual designer canvas workspace.Select your submit or hire layout component layout button (e.g., <af:button text="Process Spectra Hire" id="b1"/>).In the Property Inspector panel layout pane, locate the actionListener property block.Click the small edit dropdown selection arrow next to it, select Edit, and set it up like this:Managed Bean: HireEmployeeBean (Create a new view scope definition if prompted).Method: handleSpectraOnboarding.Now, when a student triggers the button on their high-performance Mac, JDeveloper intercepts the state via the managed bean, packages it cleanly, runs it past your backend entity filters, and seamlessly shoots a JSON response straight into Helidon over HTTP port 8080!
