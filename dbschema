@@ -1,0 +1,73 @@
+Human Resources (HR) schema provides the cleanest relational data for teaching master-detail concepts, data binding, and validation rules.
+1. The Database Schema Blueprint (HR Sample System)
+====================================================
+  
+Table 1: DEPARTMENTS- Stores organizational departmental divisions.
+
+  CREATE TABLE DEPARTMENTS (
+    DEPARTMENT_ID   NUMBER(4) PRIMARY KEY,
+    DEPARTMENT_NAME VARCHAR2(30) NOT NULL,
+    LOCATION_ID     NUMBER(4)
+);
+
+Table 2: EMPLOYEES- Stores records tied directly to departments using a Foreign Key restriction.
+
+  CREATE TABLE EMPLOYEES (
+    EMPLOYEE_ID   NUMBER(6) PRIMARY KEY,
+    FIRST_NAME    VARCHAR2(20),
+    LAST_NAME     VARCHAR2(25) NOT NULL,
+    EMAIL         VARCHAR2(25) NOT NULL UNIQUE,
+    HIRE_DATE     DATE NOT NULL,
+    JOB_ID        VARCHAR2(10) NOT NULL,
+    SALARY        NUMBER(8,2),
+    DEPARTMENT_ID NUMBER(4),
+    CONSTRAINT fk_emp_dept FOREIGN KEY (DEPARTMENT_ID) 
+        REFERENCES DEPARTMENTS(DEPARTMENT_ID)
+);
+
+Seeding Essential Data
+-----------------------
+INSERT INTO DEPARTMENTS VALUES (10, 'Administration', 1700);
+INSERT INTO DEPARTMENTS VALUES (20, 'Marketing', 1800);
+
+INSERT INTO EMPLOYEES VALUES (100, 'Steven', 'King', 'SKING', TO_DATE('2021-06-17', 'YYYY-MM-DD'), 'AD_PRES', 24000, 10);
+INSERT INTO EMPLOYEES VALUES (101, 'Neena', 'Kochhar', 'NKOCHHAR', TO_DATE('2022-09-21', 'YYYY-MM-DD'), 'AD_VP', 17000, 10);
+INSERT INTO EMPLOYEES VALUES (201, 'Michael', 'Hartstein', 'MHARTST', TO_DATE('2024-02-17', 'YYYY-MM-DD'), 'MK_MAN', 13000, 20);
+COMMIT;
+
+2. Connection Architecture in JDeveloper 14c
+  ===========================================
+  
+  JDeveloper 14c decouples database storage from application code using a hierarchical metadata layered approach.
+  
+  [Oracle Database Server] <--- (JDBC thin Driver) <--- [JDeveloper Data Connection]
+                                                               |
+                                                   [ADF Model Binding Layer]
+                                                               |
+                                                   [ADF Business Components]
+
+  Step-by-Step Configuration inside JDeveloper
+  ---------------------------------------------
+  1. Open the Window: Navigate to View -> Resources (or Databases window).
+  2. Launch the Connection Wizard: Expand the IDE Connections tree, right-click on Database, and click New Database Connection.
+  3. Fill Out Connection Properties:
+        1. Connection Name: HrConn (Keep it a valid Java identifier).
+        2. Connection Type: Oracle (JDBC).
+        3. Username / Password: Provide credentials for your dedicated schema.
+        4. Driver: thin.
+        5. Host Name: localhost (or your targeted database server IP).
+        6. JDBC Port: 1521 (Standard Oracle listener port).
+        7. Service Name: Provide your specific pluggable database path (e.g., ORCLPDB1 or freepdb1).
+
+          Test Connection: Click Test Connection. Once it displays Success, click OK.
+            
+  Modern 14c Specific Option: Oracle Cloud DB WalletIf we need an Autonomous Database environment, 
+  JDeveloper 14c includes a native connection option named "Oracle Cloud DB using Wallet". 
+    This avoids needing a hardcoded IP and port by natively consuming your secure cloud infrastructure zip file credential package.
+
+ 3. Exposing the Connection to the ADF Model Layer
+    =============================================
+    Once your IDE Connection works, it needs to be attached to your application project environment so the workspace components can read the underlying tables:
+    When executing the Day 1 task of creating Business Components, selecting HrConn as the base scheme automatically writes structural mapping configuration arrays inside your project's local bc4j.xcfg file.
+
+This setup makes sure that when your application is finally built and deployed onto a running WebLogic Server 14c Instance, it translates dynamically into an enterprise Application JDBC Data Source.
